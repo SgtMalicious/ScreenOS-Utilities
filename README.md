@@ -3,7 +3,7 @@
 Python utility scripts for working with a Juniper NetScreen ScreenOS configuration file offline.
 
 * screenos_validation - generates reports for network duplications, address group and book entry duplication, unused address group and book entries, and address book entries for hostnames that do not resolve
-* policy_view - print policies offline from a configuration file similiar to the cli
+* policy_view - print policies offline from a configuration file similar to the cli
 
 ## Requirements
 
