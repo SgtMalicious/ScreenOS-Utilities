@@ -25,6 +25,48 @@ import re
 from struct import unpack
 from socket import inet_aton, gethostbyname
 
+class screenService(object):
+	"""Class for a Screen OS Service or Group Service Entry"""
+	def __init__(self,name=None):
+		if name == None:
+			raise ValueError,"missing service name"
+
+		self.name = name
+		self.policies = []
+		self.groups = []
+		self.is_group = False
+
+	def add_policy(self,policy_id = None):
+		if policy_id == None:
+			raise ValueError,"no policy id given"
+
+		if policy_id in self.policies:
+			return
+
+		self.policies.append(policy_id)
+
+	def get_policies(self):
+		return self.policies
+
+	def is_group(self):
+		return self.is_group
+
+	def set_group(self):
+		self.is_group = True
+
+	def add_group(self,name=None):
+		if self.is_group:
+			return
+
+		if name in self.groups:
+			return
+
+		self.groups.append(name)
+
+	def get_groups(self):
+		return self.groups
+
+
 class screenPolicy(object):
 	"""Class for a Screen OS Policy"""
 	def __init__(self,id=None,src_zone=None,dst_zone=None):
@@ -165,6 +207,15 @@ def validate_entry(entry = None):
 		except:
 			nodns_entries.append(entry)
 
+def validate_service(service = None):
+	if len(service.get_policies()) == 0:
+		if service.is_group:
+			unused_services.append(service)
+		elif len(service.get_groups()) == 0:
+			unused_services.append(service)
+		elif not [ len(service_dict[x].get_policies()) for x in service.get_groups() ][0] > 0:
+			unused_services.append(service)
+
 def print_results(type = 0, entries = [], title = ""):
 	print """
 ===========================================================================================================================================================================================================================================
@@ -172,13 +223,13 @@ def print_results(type = 0, entries = [], title = ""):
 ===========================================================================================================================================================================================================================================
 """ % (title,len(entries))
 
-	if type == 1:
+	if type == 1 and len(entries):
 		print "%-55s %-20s %-15s %-15s   %-55s %-20s %-15s %-15s" % ("Name","Zone","IP","Mask","Name","Zone","IP","Mask")
 		print "___________________________________________________________________________________________________________________________________________________________________________________________________________________________________________"
 		for entry in entries:
 			print "%-55s %-20s %-15s %-15s %s %-55s %-20s %-15s %-15s %s" % (entry.name,entry.zone,entry.ip,entry.mask,"+" if entry.duplicate else "-",entry.clone.name,entry.clone.zone,entry.clone.ip,entry.clone.mask,"+" if entry.clone.duplicate else "-")
 
-	elif type == 2:
+	elif type == 2 and len(entries):
 		print "%-55s %-20s %-15s" % ("Name","Zone","IP")
 		print "__________________________________________________________________________________________"
 		for entry in entries:
@@ -187,18 +238,25 @@ def print_results(type = 0, entries = [], title = ""):
 			else:
 				print "%-55s %-20s %-15s" % (entry.name,entry.zone,"N/A")
 
-	elif type == 3:
+	elif type == 3 and len(entries):
 		print "%-55s %-20s %-15s" % ("Name","Zone","Type")
 		print "__________________________________________________________________________________________"
 		for entry in entries:
 			print "%-55s %-20s %-15s" % (entry.name,entry.zone,"Address" if isinstance(entry,screenAddress) else "Group")
 
-	elif type == 4:
+	elif type == 4 and len(entries):
 		print "%-55s %-20s %-15s" % ("Name","Zone","Hostname")
 		print "__________________________________________________________________________________________"
 		for entry in entries:
 			if isinstance(entry,screenAddress):
 				print "%-55s %-20s %-15s" % (entry.name,entry.zone,entry.hostname)
+
+	elif type == 5 and len(entries):
+		print "%-55s %-15s" % ("Name","Type")
+		print "__________________________________________________________________________________________"
+		for entry in entries:
+			print "%-55s %-15s" % (entry.name,"Group" if (entry.is_group) else "Service")
+
 
 if __name__ == '__main__':
 
@@ -209,17 +267,23 @@ if __name__ == '__main__':
 	config = []
 	zone_dict = {} # contains dictionaries of zones containing dictionaries of addresses
 	policy_dict = {} # container for policy information
+	service_dict = {} # container for service information
 
 	dupe_names = []
 	dupe_networks = []
 	unused_entries = []
+	unused_services = []
 	nodns_entries = []
 
 	address_regex = re.compile('^set address "(.*?)" "(.*?)" (.*?) (.*?)(?: "(.*?)")?$')
 	group_regex = re.compile('^set group address "(.*?)" "(.*?)" add "(.*?)"$')
-	policy_regex_full = re.compile('^set policy(?: global)? id (\d+)(?: name ".*?")? from "(.*?)" to "(.*?)"\s+"(.*?)" "(.*?)" .*?$')
-	policy_regex_begin = re.compile('^set policy id (\d+)$')
-	policy_regex_part = re.compile('^set (\w{3})-address "(.*?)"$')
+
+	policy_regex_full = re.compile('^set policy(?: global)? id (\d+)(?: name "(.*?)")? from "(.*?)" to "(.*?)"\s+"(.*?)" "(.*?)" "(.*?)" (.*?) (.*?)$')
+	policy_regex_begin = re.compile('^set policy id (\d+)(?: (disable))?$')
+	policy_regex_part = re.compile('^set (.*?) "(.*?)"$')
+
+	service_regex = re.compile('^set service "(.*?)" .*?$')
+	service_group_regex = re.compile('^set group service "(.*?)" add "(.*?)"$')
 
 	sys.stdout.write("Loading configuration...")
 	
@@ -235,6 +299,35 @@ if __name__ == '__main__':
 
 	config_iter = iter(config)
 	for line in config_iter:
+		# marks the beginning of a user-defined service entry
+		x = service_regex.split(line)[1:-1]
+		if len(x):
+			service = screenService(x[0])
+
+			if not service_dict.has_key(service.name):
+				service_dict[service.name] = service
+
+			continue
+
+		# marks the beginning of a user-defined service group entry
+		x = service_group_regex.split(line)[1:-1]
+		if len(x):
+			group_name = x[0]
+			service_name = x[1]
+
+			if service_dict.has_key(group_name):
+				group = service_dict[group_name]
+			else:
+				group = screenService(group_name)
+				group.set_group()
+				service_dict[group_name] = group
+
+			# add group to existing user-defined service entry
+			if service_dict.has_key(service_name):
+				service_dict[service_name].add_group(group_name)
+
+			continue
+
 		# marks the beginning of an address book entry
 		x = address_regex.split(line)[1:-1]
 		if len(x):
@@ -283,17 +376,21 @@ if __name__ == '__main__':
 		# marks the beginning of a complete policy line statement
 		x = policy_regex_full.split(line)[1:-1] 
 		if len(x):
-			policy = screenPolicy(x[0],x[1],x[2])
+			policy = screenPolicy(x[0],x[2],x[3])
 			if policy_dict.has_key(policy.id):
 				sys.stderr.write("Duplicate policy id entry detected: %s\n" % policy.id)
 				continue
 
+			# add policy to existing user-defined service entry
+			if service_dict.has_key(x[6]):
+				service_dict[x[6]].add_policy(policy.id)
+
 			policy_dict[policy.id] = policy
 			# ignore any policy addresses that refer to non-address entries
-			if x[3][:3] not in ['Any','MIP','VIP']:
-				zone_dict[policy.src_zone][x[3]].add_policy(policy.id)
 			if x[4][:3] not in ['Any','MIP','VIP']:
-				zone_dict[policy.dst_zone][x[4]].add_policy(policy.id)
+				zone_dict[policy.src_zone][x[4]].add_policy(policy.id)
+			if x[5][:3] not in ['Any','MIP','VIP']:
+				zone_dict[policy.dst_zone][x[5]].add_policy(policy.id)
 			continue
 
 		# marks the beginning of a policy statement with extra configuration items
@@ -305,27 +402,40 @@ if __name__ == '__main__':
 			while policy_line != 'exit':
 				y = policy_regex_part.split(policy_line)[1:-1]
 				if len(y) and y[1][:3] != 'MIP':
-					if y[0] == 'src':
+					if y[0] == 'src-address':
 						zone_dict[policy_dict[id].src_zone][y[1]].add_policy(id)
-					else:
+					elif y[0] == 'dst-address':
 						zone_dict[policy_dict[id].dst_zone][y[1]].add_policy(id)
+					elif y[0] == 'service':
+						if service_dict.has_key(y[1]):
+							service_dict[y[1]].add_policy(id)
 
 				policy_line = config_iter.next()
 
 	sys.stdout.write("loaded.\nMarking duplicate entries...")
+	sys.stdout.flush()
 	mark_duplicate_names(zone_dict)
 	mark_duplicate_addresses([ item for sublist in [zone_dict[x].values() for x in zone_dict.keys()] for item in sublist])
 
 	sys.stdout.write("complete.\nValidating entries...")
+	sys.stdout.flush()
 	for entry in [ item for sublist in [zone_dict[x].values() for x in zone_dict.keys()] for item in sublist]:
 		validate_entry(entry)
-	
+
+	sys.stdout.write("complete.\nValidating services...")
+	sys.stdout.flush()
+	for service in service_dict.values():
+		validate_service(service)
+
 	dupe_names.sort()
 	dupe_networks.sort()
 	unused_entries.sort()
+	unused_services.sort()
 	sys.stdout.write("complete.\nPrinting results:\n\n")
+	sys.stdout.flush()
 
 	print_results(1,dupe_networks,"Duplicate Networks")
 	print_results(2,dupe_names,"Duplicate Address Names")
 	print_results(3,unused_entries,"Unreferenced Group/Address Book Entries")
 	print_results(4,nodns_entries,"DNS Unresolvable Address Book Entries")
+	print_results(5,unused_services,"Unreferenced Service Entries")

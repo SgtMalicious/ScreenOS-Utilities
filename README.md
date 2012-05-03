@@ -13,7 +13,6 @@ Python utility scripts for working with a Juniper NetScreen ScreenOS configurati
 
 * No support for IPv6 entries.
 * Does not validate policies for correctness.
-* Does not check for duplicate service entries.
 * Duplicate network report requires a large screen resolution to view properly.
 * Currently reports on address book entries that lie along the same network boundary and are not necessarily identical. e.g. 192.168.1.100/24 ~ 192.168.1.0/25
 
