@@ -24,6 +24,7 @@ import sys
 import re
 from struct import unpack
 from socket import inet_aton, gethostbyname
+from datetime import datetime
 
 class screenService(object):
 	"""Class for a Screen OS Service or Group Service Entry"""
@@ -412,7 +413,10 @@ if __name__ == '__main__':
 
 				policy_line = config_iter.next()
 
-	sys.stdout.write("loaded.\nMarking duplicate entries...")
+	# Print the saved config timestamp information. From Juniper KB19448.
+	config_timestamp = datetime.fromtimestamp(852073200 + int(re.compile('.*? saved_cfg_timestamp:(\d+) ').split(config[0])[1:-1][0]))
+
+	sys.stdout.write("loaded. Configuration file dated: %s\nMarking duplicate entries..." % config_timestamp)
 	sys.stdout.flush()
 	mark_duplicate_names(zone_dict)
 	mark_duplicate_addresses([ item for sublist in [zone_dict[x].values() for x in zone_dict.keys()] for item in sublist])

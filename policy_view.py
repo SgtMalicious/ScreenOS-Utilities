@@ -21,6 +21,7 @@ import sys
 import re
 from struct import unpack
 from socket import inet_aton, gethostbyname
+from datetime import datetime
 
 try:
 	from ordereddict import OrderedDict
@@ -195,7 +196,10 @@ if __name__ == '__main__':
 
 				policy_line = config_iter.next()
 
-	sys.stdout.write("complete.\n")
+	# Print the saved config timestamp information. From Juniper KB19448.
+	config_timestamp = datetime.fromtimestamp(852073200 + int(re.compile('.*? saved_cfg_timestamp:(\d+) ').split(config[0])[1:-1][0]))
+
+	sys.stdout.write("comple. Configuration file dated: %s\n" % config_timestamp)
 
 	if sys.argv[2].isdigit():	
 		if policy_dict.has_key(sys.argv[2]):
