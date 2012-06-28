@@ -199,7 +199,7 @@ if __name__ == '__main__':
 	# Print the saved config timestamp information. From Juniper KB19448.
 	config_timestamp = datetime.fromtimestamp(852073200 + int(re.compile('.*? saved_cfg_timestamp:(\d+) ').split(config[0])[1:-1][0]))
 
-	sys.stdout.write("comple. Configuration file dated: %s\n" % config_timestamp)
+	sys.stdout.write("complete. %s policies loaded.\nConfiguration file dated: %s\n" % (len(policy_dict),config_timestamp))
 
 	if sys.argv[2].isdigit():	
 		if policy_dict.has_key(sys.argv[2]):
