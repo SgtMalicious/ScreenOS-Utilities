@@ -389,9 +389,15 @@ if __name__ == '__main__':
 			policy_dict[policy.id] = policy
 			# ignore any policy addresses that refer to non-address entries
 			if x[4][:3] not in ['Any','MIP','VIP']:
-				zone_dict[policy.src_zone][x[4]].add_policy(policy.id)
+				try:
+					zone_dict[policy.src_zone][x[4]].add_policy(policy.id)
+				except KeyError:
+					zone_dict['Global'][x[4]].add_policy(policy.id)
 			if x[5][:3] not in ['Any','MIP','VIP']:
-				zone_dict[policy.dst_zone][x[5]].add_policy(policy.id)
+				try:
+					zone_dict[policy.dst_zone][x[5]].add_policy(policy.id)
+				except KeyError:
+					zone_dict['Global'][x[5]].add_policy(policy.id)
 			continue
 
 		# marks the beginning of a policy statement with extra configuration items
@@ -402,7 +408,7 @@ if __name__ == '__main__':
 			policy_line = config_iter.next()
 			while policy_line != 'exit':
 				y = policy_regex_part.split(policy_line)[1:-1]
-				if len(y) and y[1][:3] != 'MIP':
+				if len(y) and y[1][:3] not in ['Any','MIP','VIP']:
 					if y[0] == 'src-address':
 						zone_dict[policy_dict[id].src_zone][y[1]].add_policy(id)
 					elif y[0] == 'dst-address':
